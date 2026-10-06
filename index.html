@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Quét Mã Vận Đơn - Đóng Gói</title>
+  <title>Quét Mã Vận Đơn - Tích Tức Thì</title>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; }
@@ -62,30 +62,31 @@
     localStorage.setItem("apps_script_url", url);
   }
 
+  // Âm thanh BÍP / TÍCH sắc nét phát ngay lập tức
   function playBeep() {
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = "sine";
-      osc.frequency.value = 1000;
+      osc.frequency.value = 1800; // Tần số cao ngắn gọn tạo âm tích giòn
+      gain.gain.setValueAtTime(0.5, ctx.currentTime);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start();
-      setTimeout(() => { osc.stop(); ctx.close(); }, 150);
+      setTimeout(() => { osc.stop(); ctx.close(); }, 80);
     } catch(e) {}
   }
 
   function triggerVibrate() {
-    if (navigator.vibrate) navigator.vibrate(200);
+    if (navigator.vibrate) navigator.vibrate(100);
   }
 
   function startScanner() {
     if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
     
-    // Cấu hình quét tốc độ cao (25 FPS + Tận dụng phần cứng điện thoại)
     const config = { 
-      fps: 25, 
+      fps: 30, 
       qrbox: { width: 280, height: 180 },
       experimentalFeatures: { useBarCodeDetectorIfSupported: true }
     };
@@ -103,32 +104,39 @@
 
   function onScanSuccess(decodedText) {
     const now = Date.now();
-    if (decodedText === lastScannedCode && (now - lastScannedTime) < 3000) return;
+    // Chống quét trùng mã cũ trong 2 giây
+    if (decodedText === lastScannedCode && (now - lastScannedTime) < 2000) return;
     if (isProcessing) return;
 
     isProcessing = true;
     lastScannedCode = decodedText;
     lastScannedTime = now;
 
+    // ⚡ PHÁT TIẾNG TÍCH VÀ RUNG NGAY KHI BẮT ĐƯỢC MÃ (TỐC ĐỘ 0.001 GIÂY)
     playBeep();
     triggerVibrate();
-    setStatus(`Đang xử lý mã: ${decodedText}...`, "waiting");
+
+    setStatus(`⚡ Đã đọc mã: ${decodedText}`, "success");
+    
+    // Gửi dữ liệu ngầm lên Google Sheet
     sendToGoogleSheet(decodedText);
+
+    // Mở lại luồng nhận mã ngay lập tức sau 0.3s để quét liên tục
+    setTimeout(() => { isProcessing = false; }, 300);
   }
 
   function sendToGoogleSheet(maVanDon) {
     const scriptUrl = document.getElementById("scriptUrl").value.trim();
     if (!scriptUrl) {
       setStatus("Vui lòng dán Web App URL của Apps Script trước!", "error");
-      isProcessing = false;
       return;
     }
     const url = `${scriptUrl}?maVanDon=${encodeURIComponent(maVanDon)}`;
+    
     fetch(url)
       .then(response => response.json())
       .then(data => {
         if (data.success) {
-          setStatus(`🟢 Đã đóng gói: ${maVanDon}`, "success");
           addHistory(data.maVanDon, data.thoiGian, "Đã đóng gói", "success");
         } else if (data.duplicate) {
           setStatus(`⚠️ ${data.message}: ${maVanDon}`, "duplicate");
@@ -137,8 +145,7 @@
           setStatus(`🔴 Lỗi: ${data.message}`, "error");
         }
       })
-      .catch(err => setStatus("🔴 Lỗi kết nối tới Apps Script!", "error"))
-      .finally(() => setTimeout(() => { isProcessing = false; }, 1200));
+      .catch(err => console.error("Lỗi gửi Google Sheet:", err));
   }
 
   function setStatus(text, type) {

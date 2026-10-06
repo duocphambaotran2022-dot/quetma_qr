@@ -1,252 +1,107 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Quét Mã Vận Đơn - Tích Tức Thì</title>
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quét Mã Vận Đơn & Đóng Gói</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; }
-    body { background-color: #f4f6f9; padding: 15px; color: #333; }
-    .container { max-width: 500px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-    h2 { text-align: center; color: #1e3c72; margin-bottom: 15px; font-size: 20px; }
-    .config-box { margin-bottom: 15px; }
-    .config-box label { font-size: 13px; font-weight: bold; color: #555; display: block; margin-bottom: 5px; }
-    .config-box input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; }
-    #reader { width: 100%; border-radius: 8px; overflow: hidden; background: #000; min-height: 250px; }
-    .status-box { margin-top: 15px; padding: 12px; border-radius: 8px; text-align: center; font-weight: bold; font-size: 15px; min-height: 48px; display: flex; align-items: center; justify-content: center; }
-    .status-waiting { background: #e9ecef; color: #495057; }
-    .status-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-    .status-duplicate { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
-    .status-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-    .history-title { margin-top: 20px; font-size: 15px; font-weight: bold; color: #333; border-bottom: 2px solid #1e3c72; padding-bottom: 5px; }
-    .history-list { list-style: none; margin-top: 10px; max-height: 200px; overflow-y: auto; }
-    .history-item { background: #f8f9fa; border: 1px solid #e9ecef; padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
-    .badge-success { background: #28a745; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; }
-    .badge-duplicate { background: #ffc107; color: #333; padding: 2px 8px; border-radius: 12px; font-size: 11px; }
-    .badge-error { background: #dc3545; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; }
-    .controls { margin-top: 15px; display: flex; gap: 10px; }
-    .btn { flex: 1; padding: 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
-    .btn-start { background: #28a745; color: white; }
-    .btn-stop { background: #dc3545; color: white; }
+    body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background-color: #f4f7f6; margin: 0; }
+    h2 { color: #2c3e50; font-size: 22px; margin-bottom: 20px; }
+    .box { background: white; border-radius: 12px; padding: 25px 20px; max-width: 400px; margin: 0 auto; box-shadow: 0 4px 10px rgba(0,0,0,0.08); }
+    input[type="text"] { width: 100%; padding: 15px; font-size: 18px; border: 2px solid #27ae60; border-radius: 8px; box-sizing: border-box; text-align: center; outline: none; margin-bottom: 15px; }
+    input[type="text"]:focus { border-color: #219653; box-shadow: 0 0 5px rgba(39, 174, 96, 0.5); }
+    
+    /* Thiết kế nút bấm Đã đóng gói */
+    .btn-pack {
+      width: 100%;
+      background-color: #27ae60;
+      color: white;
+      border: none;
+      padding: 14px;
+      font-size: 18px;
+      font-weight: bold;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-pack:hover { background-color: #219653; }
+    .btn-pack:active { background-color: #1e8449; }
+    .btn-pack:disabled { background-color: #95a5a6; cursor: not-allowed; }
+
+    #result { margin-top: 15px; font-size: 16px; font-weight: bold; color: #27ae60; min-height: 24px; }
+    #history { margin-top: 25px; text-align: left; max-width: 400px; margin-left: auto; margin-right: auto; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
   </style>
 </head>
 <body>
-<div class="container">
-  <h2>📷 Quét Mã Vận Đơn</h2>
-  <div class="config-box">
-    <label for="scriptUrl">Dán Web App URL Apps Script tại đây:</label>
-    <input type="text" id="scriptUrl" placeholder="https://script.google.com/macros/s/.../exec" onchange="saveUrl()">
-  </div>
-  <div id="reader"></div>
-  <div class="controls">
-    <button class="btn btn-start" onclick="startScanner()">Mở Camera</button>
-    <button class="btn btn-stop" onclick="stopScanner()">Tắt Camera</button>
-  </div>
-  <div id="status" class="status-box status-waiting">Sẵn sàng quét mã...</div>
-  <div class="history-title">📋 Lịch sử quét gần đây</div>
-  <ul id="history" class="history-list"></ul>
-</div>
-
-<!-- ==================== DÁN PHẦN MỚI VÀO ĐÂY ==================== -->
-<script>
-  let html5QrCode;
-  let isProcessing = false;
-  let lastScannedCode = "";
-  let lastScannedTime = 0;
-
-  // Khởi tạo AudioContext dùng chung để tránh bị nghẽn/mất âm thanh khi quét nhanh
-  let audioCtx = null;
-
-  function getAudioContext() {
-    if (!audioCtx) {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    }
-    if (audioCtx.state === 'suspended') {
-      audioCtx.resume();
-    }
-    return audioCtx;
-  }
-
-  window.onload = function() {
-    const savedUrl = localStorage.getItem("apps_script_url");
-    if (savedUrl) document.getElementById("scriptUrl").value = savedUrl;
-  };
-
-  function saveUrl() {
-    const url = document.getElementById("scriptUrl").value.trim();
-    localStorage.setItem("apps_script_url", url);
-  }
-
-  // 1. Tiếng TÍCH cao, ngắn gọn cho đơn THÀNH CÔNG (Mã mới)
-  function playSuccessBeep() {
-    try {
-      const ctx = getAudioContext();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(1800, ctx.currentTime); // Tần số cao 1800Hz
-      gain.gain.setValueAtTime(0.5, ctx.currentTime);
-      
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      
-      osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 0.08); // Kêu trong 0.08 giây
-    } catch(e) {
-      console.error("Lỗi âm thanh:", e);
-    }
-  }
-
-  // 2. Tiếng BÍP BÍP trầm kéo dài cảnh báo TRÙNG ĐƠN
-  function playDuplicateBeep() {
-    try {
-      const ctx = getAudioContext();
-      
-      // Bíp lần 1
-      const osc1 = ctx.createOscillator();
-      const gain1 = ctx.createGain();
-      osc1.type = "sawtooth";
-      osc1.frequency.setValueAtTime(600, ctx.currentTime); // Tần số trầm 600Hz
-      gain1.gain.setValueAtTime(0.6, ctx.currentTime);
-      osc1.connect(gain1);
-      gain1.connect(ctx.destination);
-      osc1.start(ctx.currentTime);
-      osc1.stop(ctx.currentTime + 0.15);
-
-      // Bíp lần 2 (sau 0.2 giây)
-      const osc2 = ctx.createOscillator();
-      const gain2 = ctx.createGain();
-      osc2.type = "sawtooth";
-      osc2.frequency.setValueAtTime(600, ctx.currentTime + 0.2);
-      gain2.gain.setValueAtTime(0.6, ctx.currentTime + 0.2);
-      osc2.connect(gain2);
-      gain2.connect(ctx.destination);
-      osc2.start(ctx.currentTime + 0.2);
-      osc2.stop(ctx.currentTime + 0.35);
-    } catch(e) {
-      console.error("Lỗi âm thanh trùng:", e);
-    }
-  }
-
-  function triggerVibrate(pattern = 100) {
-    if (navigator.vibrate) navigator.vibrate(pattern);
-  }
-
-  function startScanner() {
-    // Kích hoạt AudioContext ngay khi người dùng bấm Mở Camera
-    getAudioContext();
-
-    if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
+  <h2>📦 Quét Mã & Xác Nhận Đóng Gói</h2>
+  
+  <div class="box">
+    <input type="text" id="barcodeInput" placeholder="Click vào đây rồi quét hoặc nhập mã..." autofocus autocomplete="off">
     
-    const config = { 
-      fps: 30, 
-      qrbox: { width: 280, height: 180 },
-      experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+    <!-- Nút bấm xác nhận đã đóng gói -->
+    <button type="button" id="btnConfirm" class="btn-pack" onclick="thucHienDongGoi()">✅ Đã Đóng Gói</button>
+    
+    <div id="result">Sẵn sàng nhận mã...</div>
+  </div>
+
+  <div id="history">
+    <h3 style="margin-top:0; font-size: 15px; color: #333;">Lịch sử quét gần đây:</h3>
+    <ul id="listHistory" style="padding-left: 20px; font-size: 14px; margin-bottom:0;"></ul>
+  </div>
+
+  <script>
+    const inputField = document.getElementById('barcodeInput');
+    const btnConfirm = document.getElementById('btnConfirm');
+    const elementResult = document.getElementById('result');
+    const listHistory = document.getElementById('listHistory');
+
+    // Tự động focus vào ô nhập liệu khi mở web
+    window.onload = function() {
+      inputField.focus();
     };
 
-    html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess).catch(err => {
-      setStatus("Không mở được camera: " + err, "error");
+    // Hàm chung xử lý lưu dữ liệu xuống Google Sheet
+    function thucHienDongGoi() {
+      let ma = inputField.value.trim();
+      if (!ma) {
+        elementResult.innerText = "⚠️ Vui lòng quét hoặc nhập mã đơn!";
+        inputField.focus();
+        return;
+      }
+
+      elementResult.innerText = "⏳ Đang lưu: " + ma;
+      inputField.disabled = true;
+      btnConfirm.disabled = true;
+
+      google.script.run
+        .withSuccessHandler(function(response) {
+          elementResult.innerText = "✅ Đã lưu thành công: " + ma;
+          let timeString = new Date().toLocaleTimeString();
+          let li = document.createElement('li');
+          li.innerText = ma + " (" + timeString + ")";
+          listHistory.prepend(li);
+          
+          inputField.value = "";
+          inputField.disabled = false;
+          btnConfirm.disabled = false;
+          inputField.focus();
+        })
+        .withFailureHandler(function(error) {
+          elementResult.innerText = "❌ Lỗi lưu: " + error.message;
+          inputField.disabled = false;
+          btnConfirm.disabled = false;
+          inputField.focus();
+        })
+        .ghiNhanMaVanDon(ma);
+    }
+
+    // Hỗ trợ nhấn phím Enter (nếu dùng máy quét tự bắn phím Enter)
+    inputField.addEventListener('keypress', function (e) {
+      if (e.key === 'Enter') {
+        thucHienDongGoi();
+      }
     });
-  }
-
-  function stopScanner() {
-    if (html5QrCode) {
-      html5QrCode.stop().then(() => setStatus("Đã tắt camera", "waiting")).catch(err => console.error(err));
-    }
-  }
-
-  function onScanSuccess(decodedText) {
-    const now = Date.now();
-    
-    // Nếu quét lại cùng 1 mã trong vòng 2 giây ➔ Cảnh báo trùng ngay trên Camera
-    if (decodedText === lastScannedCode && (now - lastScannedTime) < 2000) {
-      playDuplicateBeep();
-      triggerVibrate([100, 100, 100]); // Rung 2 nhịp
-      setStatus(`⚠️ Quét quá nhanh / Trùng mã vừa quét: ${decodedText}`, "duplicate");
-      return;
-    }
-
-    if (isProcessing) return;
-
-    isProcessing = true;
-    lastScannedCode = decodedText;
-    lastScannedTime = now;
-
-    // Phát âm thanh TÍCH thành công ban đầu khi camera bắt được mã
-    playSuccessBeep();
-    triggerVibrate(80);
-
-    setStatus(`⚡ Đã đọc mã: ${decodedText}`, "success");
-    
-    // Gửi dữ liệu lên Google Sheet
-    sendToGoogleSheet(decodedText);
-
-    // Cho phép quét mã tiếp theo sau 0.3 giây
-    setTimeout(() => { isProcessing = false; }, 300);
-  }
-
-  function sendToGoogleSheet(maVanDon) {
-    const scriptUrl = document.getElementById("scriptUrl").value.trim();
-    if (!scriptUrl) {
-      setStatus("Vui lòng dán Web App URL của Apps Script trước!", "error");
-      return;
-    }
-
-    const timeNow = new Date().toLocaleTimeString();
-    const url = `${scriptUrl}?maVanDon=${encodeURIComponent(maVanDon)}`;
-    
-    fetch(url)
-      .then(response => response.json())
-      .then(data => {
-        if (data.success) {
-          addHistory(data.maVanDon || maVanDon, data.thoiGian || timeNow, "Đã đóng gói", "success");
-        } else if (data.duplicate) {
-          // PHÁT CẢNH BÁO TRÙNG MÃ (Nếu Google Sheet báo mã đã tồn tại trước đó)
-          playDuplicateBeep();
-          triggerVibrate([150, 100, 150]);
-          setStatus(`⚠️ ${data.message || 'Mã đã tồn tại trong Sheet'}: ${maVanDon}`, "duplicate");
-          addHistory(data.maVanDon || maVanDon, timeNow, "Trùng mã", "duplicate");
-        } else {
-          setStatus(`🔴 Lỗi: ${data.message}`, "error");
-          addHistory(maVanDon, timeNow, "Lỗi Sheet", "error");
-        }
-      })
-      .catch(err => {
-        console.warn("Mạng chậm, tự động gửi bằng mode dự phòng no-cors:", err);
-        fetch(url, { mode: 'no-cors' })
-          .then(() => {
-            setStatus(`✅ Đã ghi nhận: ${maVanDon}`, "success");
-            addHistory(maVanDon, timeNow, "Đã đóng gói", "success");
-          })
-          .catch(() => {
-            setStatus(`🔴 Lỗi kết nối mạng khi gửi mã ${maVanDon}`, "error");
-            addHistory(maVanDon, timeNow, "Lỗi kết nối", "error");
-          });
-      });
-  }
-
-  function setStatus(text, type) {
-    const statusDiv = document.getElementById("status");
-    statusDiv.className = `status-box status-${type}`;
-    statusDiv.innerText = text;
-  }
-
-  function addHistory(code, time, note, type) {
-    const historyList = document.getElementById("history");
-    const li = document.createElement("li");
-    li.className = "history-item";
-    
-    let badgeClass = "badge-success";
-    if (type === "duplicate") badgeClass = "badge-duplicate";
-    if (type === "error") badgeClass = "badge-error";
-
-    li.innerHTML = `<span><strong>${code}</strong> <small>(${time})</small></span><span class="${badgeClass}">${note}</span>`;
-    historyList.insertBefore(li, historyList.firstChild);
-  }
-</script>
-<!-- ==================== KẾT THÚC PHẦN DÁN ==================== -->
-
+  </script>
 </body>
 </html>

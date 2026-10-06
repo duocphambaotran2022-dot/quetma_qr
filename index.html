@@ -47,11 +47,26 @@
   <div class="history-title">📋 Lịch sử quét gần đây</div>
   <ul id="history" class="history-list"></ul>
 </div>
+
+<!-- ==================== DÁN PHẦN MỚI VÀO ĐÂY ==================== -->
 <script>
   let html5QrCode;
   let isProcessing = false;
   let lastScannedCode = "";
   let lastScannedTime = 0;
+
+  // Khởi tạo AudioContext dùng chung để tránh bị nghẽn/mất âm thanh khi quét nhanh
+  let audioCtx = null;
+
+  function getAudioContext() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+    return audioCtx;
+  }
 
   window.onload = function() {
     const savedUrl = localStorage.getItem("apps_script_url");
@@ -63,27 +78,66 @@
     localStorage.setItem("apps_script_url", url);
   }
 
-  // Âm thanh BÍP / TÍCH sắc nét phát ngay lập tức
-  function playBeep() {
+  // 1. Tiếng TÍCH cao, ngắn gọn cho đơn THÀNH CÔNG (Mã mới)
+  function playSuccessBeep() {
     try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const ctx = getAudioContext();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
+      
       osc.type = "sine";
-      osc.frequency.value = 1800; // Tần số cao ngắn gọn tạo âm tích giòn
+      osc.frequency.setValueAtTime(1800, ctx.currentTime); // Tần số cao 1800Hz
       gain.gain.setValueAtTime(0.5, ctx.currentTime);
+      
       osc.connect(gain);
       gain.connect(ctx.destination);
-      osc.start();
-      setTimeout(() => { osc.stop(); ctx.close(); }, 80);
-    } catch(e) {}
+      
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.08); // Kêu trong 0.08 giây
+    } catch(e) {
+      console.error("Lỗi âm thanh:", e);
+    }
   }
 
-  function triggerVibrate() {
-    if (navigator.vibrate) navigator.vibrate(100);
+  // 2. Tiếng BÍP BÍP trầm kéo dài cảnh báo TRÙNG ĐƠN
+  function playDuplicateBeep() {
+    try {
+      const ctx = getAudioContext();
+      
+      // Bíp lần 1
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = "sawtooth";
+      osc1.frequency.setValueAtTime(600, ctx.currentTime); // Tần số trầm 600Hz
+      gain1.gain.setValueAtTime(0.6, ctx.currentTime);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(ctx.currentTime);
+      osc1.stop(ctx.currentTime + 0.15);
+
+      // Bíp lần 2 (sau 0.2 giây)
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = "sawtooth";
+      osc2.frequency.setValueAtTime(600, ctx.currentTime + 0.2);
+      gain2.gain.setValueAtTime(0.6, ctx.currentTime + 0.2);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(ctx.currentTime + 0.2);
+      osc2.stop(ctx.currentTime + 0.35);
+    } catch(e) {
+      console.error("Lỗi âm thanh trùng:", e);
+    }
+  }
+
+  function triggerVibrate(pattern = 100) {
+    if (navigator.vibrate) navigator.vibrate(pattern);
   }
 
   function startScanner() {
+    // Kích hoạt AudioContext ngay khi người dùng bấm Mở Camera
+    getAudioContext();
+
     if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
     
     const config = { 
@@ -105,24 +159,31 @@
 
   function onScanSuccess(decodedText) {
     const now = Date.now();
-    // Chống quét trùng mã cũ trong 2 giây
-    if (decodedText === lastScannedCode && (now - lastScannedTime) < 2000) return;
+    
+    // Nếu quét lại cùng 1 mã trong vòng 2 giây ➔ Cảnh báo trùng ngay trên Camera
+    if (decodedText === lastScannedCode && (now - lastScannedTime) < 2000) {
+      playDuplicateBeep();
+      triggerVibrate([100, 100, 100]); // Rung 2 nhịp
+      setStatus(`⚠️ Quét quá nhanh / Trùng mã vừa quét: ${decodedText}`, "duplicate");
+      return;
+    }
+
     if (isProcessing) return;
 
     isProcessing = true;
     lastScannedCode = decodedText;
     lastScannedTime = now;
 
-    // ⚡ PHÁT TIẾNG TÍCH VÀ RUNG NGAY KHI BẮT ĐƯỢC MÃ (TỐC ĐỘ 0.001 GIÂY)
-    playBeep();
-    triggerVibrate();
+    // Phát âm thanh TÍCH thành công ban đầu khi camera bắt được mã
+    playSuccessBeep();
+    triggerVibrate(80);
 
     setStatus(`⚡ Đã đọc mã: ${decodedText}`, "success");
     
-    // Gửi dữ liệu ngầm lên Google Sheet
+    // Gửi dữ liệu lên Google Sheet
     sendToGoogleSheet(decodedText);
 
-    // Mở lại luồng nhận mã ngay lập tức sau 0.3s để quét liên tục
+    // Cho phép quét mã tiếp theo sau 0.3 giây
     setTimeout(() => { isProcessing = false; }, 300);
   }
 
@@ -142,7 +203,10 @@
         if (data.success) {
           addHistory(data.maVanDon || maVanDon, data.thoiGian || timeNow, "Đã đóng gói", "success");
         } else if (data.duplicate) {
-          setStatus(`⚠️ ${data.message || 'Trùng mã'}: ${maVanDon}`, "duplicate");
+          // PHÁT CẢNH BÁO TRÙNG MÃ (Nếu Google Sheet báo mã đã tồn tại trước đó)
+          playDuplicateBeep();
+          triggerVibrate([150, 100, 150]);
+          setStatus(`⚠️ ${data.message || 'Mã đã tồn tại trong Sheet'}: ${maVanDon}`, "duplicate");
           addHistory(data.maVanDon || maVanDon, timeNow, "Trùng mã", "duplicate");
         } else {
           setStatus(`🔴 Lỗi: ${data.message}`, "error");
@@ -150,8 +214,7 @@
         }
       })
       .catch(err => {
-        console.warn("Mạng phản hồi chậm/lỗi CORS, tự động chuyển sang chế độ gửi dự phòng:", err);
-        // Dự phòng: Gửi lại bằng mode no-cors để đảm bảo Sheet vẫn nhận mã và màn hình luôn hiển thị đủ đơn
+        console.warn("Mạng chậm, tự động gửi bằng mode dự phòng no-cors:", err);
         fetch(url, { mode: 'no-cors' })
           .then(() => {
             setStatus(`✅ Đã ghi nhận: ${maVanDon}`, "success");
@@ -183,5 +246,7 @@
     historyList.insertBefore(li, historyList.firstChild);
   }
 </script>
+<!-- ==================== KẾT THÚC PHẦN DÁN ==================== -->
+
 </body>
 </html>

@@ -82,7 +82,14 @@
 
   function startScanner() {
     if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
-    const config = { fps: 10, qrbox: { width: 250, height: 150 }, aspectRatio: 1.0 };
+    
+    // Cấu hình quét tốc độ cao (25 FPS + Tận dụng phần cứng điện thoại)
+    const config = { 
+      fps: 25, 
+      qrbox: { width: 280, height: 180 },
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+    };
+
     html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess).catch(err => {
       setStatus("Không mở được camera: " + err, "error");
     });
@@ -131,7 +138,7 @@
         }
       })
       .catch(err => setStatus("🔴 Lỗi kết nối tới Apps Script!", "error"))
-      .finally(() => setTimeout(() => { isProcessing = false; }, 1500));
+      .finally(() => setTimeout(() => { isProcessing = false; }, 1200));
   }
 
   function setStatus(text, type) {

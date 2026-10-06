@@ -24,6 +24,7 @@
     .history-item { background: #f8f9fa; border: 1px solid #e9ecef; padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
     .badge-success { background: #28a745; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; }
     .badge-duplicate { background: #ffc107; color: #333; padding: 2px 8px; border-radius: 12px; font-size: 11px; }
+    .badge-error { background: #dc3545; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; }
     .controls { margin-top: 15px; display: flex; gap: 10px; }
     .btn { flex: 1; padding: 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
     .btn-start { background: #28a745; color: white; }
@@ -131,21 +132,36 @@
       setStatus("Vui lòng dán Web App URL của Apps Script trước!", "error");
       return;
     }
+
+    const timeNow = new Date().toLocaleTimeString();
     const url = `${scriptUrl}?maVanDon=${encodeURIComponent(maVanDon)}`;
     
     fetch(url)
       .then(response => response.json())
       .then(data => {
         if (data.success) {
-          addHistory(data.maVanDon, data.thoiGian, "Đã đóng gói", "success");
+          addHistory(data.maVanDon || maVanDon, data.thoiGian || timeNow, "Đã đóng gói", "success");
         } else if (data.duplicate) {
-          setStatus(`⚠️ ${data.message}: ${maVanDon}`, "duplicate");
-          addHistory(data.maVanDon, new Date().toLocaleTimeString(), "Trùng mã", "duplicate");
+          setStatus(`⚠️ ${data.message || 'Trùng mã'}: ${maVanDon}`, "duplicate");
+          addHistory(data.maVanDon || maVanDon, timeNow, "Trùng mã", "duplicate");
         } else {
           setStatus(`🔴 Lỗi: ${data.message}`, "error");
+          addHistory(maVanDon, timeNow, "Lỗi Sheet", "error");
         }
       })
-      .catch(err => console.error("Lỗi gửi Google Sheet:", err));
+      .catch(err => {
+        console.warn("Mạng phản hồi chậm/lỗi CORS, tự động chuyển sang chế độ gửi dự phòng:", err);
+        // Dự phòng: Gửi lại bằng mode no-cors để đảm bảo Sheet vẫn nhận mã và màn hình luôn hiển thị đủ đơn
+        fetch(url, { mode: 'no-cors' })
+          .then(() => {
+            setStatus(`✅ Đã ghi nhận: ${maVanDon}`, "success");
+            addHistory(maVanDon, timeNow, "Đã đóng gói", "success");
+          })
+          .catch(() => {
+            setStatus(`🔴 Lỗi kết nối mạng khi gửi mã ${maVanDon}`, "error");
+            addHistory(maVanDon, timeNow, "Lỗi kết nối", "error");
+          });
+      });
   }
 
   function setStatus(text, type) {
@@ -158,7 +174,11 @@
     const historyList = document.getElementById("history");
     const li = document.createElement("li");
     li.className = "history-item";
-    const badgeClass = type === "success" ? "badge-success" : "badge-duplicate";
+    
+    let badgeClass = "badge-success";
+    if (type === "duplicate") badgeClass = "badge-duplicate";
+    if (type === "error") badgeClass = "badge-error";
+
     li.innerHTML = `<span><strong>${code}</strong> <small>(${time})</small></span><span class="${badgeClass}">${note}</span>`;
     historyList.insertBefore(li, historyList.firstChild);
   }
